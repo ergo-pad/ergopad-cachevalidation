@@ -1,0 +1,16 @@
+import os
+import dotenv
+import logging
+
+dotenv.load_dotenv()
+DEBUG = os.getenv("DEBUG")
+if DEBUG:
+    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+
+ERGO_EXPLORER_API = "https://api.ergoplatform.com/api/v1"
+ERGOPAD_API = "https://ergopad.io/api"
+TOKEN_NAMES = ("Paideia", "Paideia Stake Key")
+PAIDEIA_STAKE_TOKEN_ID = "245957934c20285ada547aa8f2c8e6f7637be86a1985b3e4c36e4e1ad8ce97ab"
+PAIDEIA_SMART_CONTRACT_ADDRESS = "BxjSQHD1hqQFUXbXatkn46YUxM6wVsLkT5HNXJe1N1n3dM2c7X8BtgnLqszJuxoRTnzXzrCrmEjPyLxqstcnW7YkQJ9m7QTmhChBYt1hAFcTWiyVMdaiYYFtxr7qfXKcjsadtfusNhS63ZddciC3wogjrfSE3U2Fy9dhrrKStUVzWhTP22ZuwdDPv8F88WVtdLsu24bbHsv2ntXZJGhvdKnvJL83kJWs9XV582sqUBqX7kL2A5qp6T2Jxgt3gLxcZ99JhUG99YtRsmpuwb94TE5KVTESWA6cD8EdReTbP1kwW77rnJyNfj8KUsy1j7AZuNBUsVBc3oLV4GxYFDvaTNEyNBmGY3dEe8k7UKjUSnqCmYH2QM2cmhtPEdT6UBR9sS4h4YFiGsRHiybjuTSaBUPrzhJ12ESKf8jcaNna9rYprzm8ZnfwNEQFtPJyKfCoJjbwkfsAEirsMcyU3VjPAvKJ2mtu7A3WwXViBSfwUgdCnWkEhdPCRPueAXfN38JXG8HjJeZTPi3VtgcnFobg8Zjp1XtRkTaoj6i4BgyfwCft3sCYgBgmNjXhtFuuozpCiAXWyGMMs5rhJL6FzXsJWiTSML96LdshFnhoPRPi8FXVooURKztnqJowFcpLApL2ou2jfeC4iaxKgtd6zDR6ikFVXMsipVHmBrhan9dheUPnfjeXz9WVPmGLmVkrxnVv"
+ERGOPAD_USER = os.getenv("ERGOPAD_USER")
+ERGOPAD_PASSWORD = os.getenv("ERGOPAD_PASSWORD")
