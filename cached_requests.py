@@ -16,6 +16,7 @@ class CachedRequests:
         res = CachedRequests.cache.get(url)
         if (res and res["timestamp"] + CachedRequests.config["default_ttl"] > time.time()):
             # valid cached value
+            time.sleep(1)
             logging.info(f"CachedRequests.get::cached return for {url}")
             return res["data"]
         else:
