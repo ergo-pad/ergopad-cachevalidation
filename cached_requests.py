@@ -22,7 +22,7 @@ class CachedRequests:
         else:
             try:
                 logging.info(f"CachedRequests.get::polling for {url}")
-                res = requests.get(url).json()
+                res = requests.get(url, timeout=30).json()
                 CachedRequests.cache.set(url, {"timestamp": time.time(), "data": res})
                 return res
             except Exception as e:

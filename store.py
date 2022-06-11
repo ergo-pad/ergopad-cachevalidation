@@ -12,5 +12,5 @@ class Store:
         logging.info(f"Store.get::query for {key}")
         if key in self.data:
             return self.data[key]
-        logging.warning(f"Store.set::key not found {key}")
+        logging.warning(f"Store.get::key not found {key}")
         return None

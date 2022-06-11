@@ -6,6 +6,7 @@ from urllib.parse import quote
 import config
 from store import Store
 from cached_requests import CachedRequests
+from jwt_exception import JWTException
 
 
 def get_jwt_token():
@@ -28,29 +29,31 @@ def invalidate_cache(keys, access_token):
         headers = {"accept": "application/json"}
         json = {"keys": list(keys)}
         res = requests.post(url_invalidate_cache, headers=dict(headers, **{"Authorization": f"Bearer {access_token}"}), json=json)
-        return res.json()
+        if res.ok:
+            return res.json()
+        logging.warning(f"invalidate_cache::api failed")
     except Exception as e:
         logging.error(f"invalidate_cache::{str(e)}")
         return None
-
-
-def generate_keys(addresses):
-    keys = []
-    if len(addresses) == 0:
-        return keys
-    for address in addresses:
-        address_key = f"get_staking_staked_addresses_{address}_balance_confirmed"
-        keys.append(address_key)
-    stake_token_key = f"get_staking_staked_token_boxes_{config.PAIDEIA_STAKE_TOKEN_ID}"
-    keys.append(stake_token_key)
-    return keys
 
 
 def is_wallet_address(address):
     return 40 <= len(address) and len(address) <= 60
 
 
-def get_new_addresses(old_transactions, new_transactions):
+def generate_keys_staking(addresses, stake_config):
+    keys = []
+    if len(addresses) == 0:
+        return keys
+    for address in addresses:
+        address_key = f"get_staking_staked_addresses_{address}_balance_confirmed"
+        keys.append(address_key)
+    stake_token_key = f"get_staking_staked_token_boxes_{stake_config['stake_token_id']}"
+    keys.append(stake_token_key)
+    return keys
+
+
+def get_new_addresses_staking(old_transactions, new_transactions, stake_config):
     old_transaction_ids = list(map(lambda x : x["id"], old_transactions))
     addresses = set()
     for transaction in new_transactions:
@@ -62,7 +65,7 @@ def get_new_addresses(old_transactions, new_transactions):
                     continue
                 tokens = box["assets"]
                 for token in tokens:
-                    if token["name"] in config.TOKEN_NAMES:
+                    if token["name"] in stake_config["token_names"]:
                         addresses.add(address)
     return list(addresses)
 
@@ -72,35 +75,44 @@ class CacheInvalidatorService:
         self.access_token = get_jwt_token()
         self.store = Store()
 
-
-    def _loop(self):
-        pool_url = f"{config.ERGO_EXPLORER_API}/addresses/{config.PAIDEIA_SMART_CONTRACT_ADDRESS}/transactions?offset=0&limit=30"
+    # _loop over multiple smart contract addresses
+    # passed in as config
+    def _loop_staking(self, stake_config):
+        pool_url = f"{config.ERGO_EXPLORER_API}/addresses/{stake_config['smart_contract_address']}/transactions?offset=0&limit=30"
         res = CachedRequests.get(pool_url)
         transactions = res["items"]
-        
-        if str(self.store.get("transactions")) == str(transactions):
-            logging.info(f"CacheInvalidatorService._loop::no new transactions detected")
+
+        if str(self.store.get(f"transactions_{stake_config['name']}")) == str(transactions):
+            logging.info(f"CacheInvalidatorService._loop_staking::no new transactions detected for {stake_config['name']}")
             return
 
-        logging.info(f"CacheInvalidatorService._loop::new transactions detected")
+        logging.info(f"CacheInvalidatorService._loop_staking::new transactions detected for {stake_config['name']}")
         old_transactions = []
-        if self.store.get("transactions") != None:
-            old_transactions = self.store.get("transactions")
-        
-        addresses = get_new_addresses(old_transactions, transactions)
-        keys = generate_keys(addresses)
-        if len(keys) != 0:
-            logging.critical(f"CacheInvalidatorService._loop::invalidating the following keys: {str(keys)}")
-            ret = invalidate_cache(keys, self.access_token)
-            logging.critical(f"CacheInvalidatorService._loop::invalidated: {str(ret)}")
+        if self.store.get(f"transactions_{stake_config['name']}") != None:
+            old_transactions = self.store.get(f"transactions_{stake_config['name']}")
 
-        self.store.set("transactions", transactions)
+        addresses = get_new_addresses_staking(old_transactions, transactions, stake_config)
+        keys = generate_keys_staking(addresses, stake_config)
+        if len(keys) != 0:
+            logging.critical(f"CacheInvalidatorService._loop_staking::invalidating the following keys: {str(keys)}")
+            ret = invalidate_cache(keys, self.access_token)
+            if ret == None:
+                raise JWTException("CacheInvalidatorService._loop_staking::jwt token expired")
+            logging.critical(f"CacheInvalidatorService._loop_staking::invalidated: {str(ret)}")
+
+        self.store.set(f"transactions_{stake_config['name']}", transactions)
 
 
     def start(self):
         while True:
             try:
-                self._loop()
+                for stake_config in config.STAKING_TOKENS:
+                    try:
+                        self._loop_staking(stake_config)
+                    except JWTException as e:
+                        raise e
+                    except Exception as e:
+                        logging.error(f"CacheInvalidatorService.start::{str(e)}")
             except Exception as e:
                 logging.error(f"CacheInvalidatorService.start::{str(e)}")
                 time.sleep(10)
