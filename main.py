@@ -70,10 +70,67 @@ def get_new_addresses_staking(old_transactions, new_transactions, stake_config):
     return list(addresses)
 
 
+def generate_keys_vesting(addresses):
+    keys = []
+    if len(addresses) == 0:
+        return keys
+    for address in addresses:
+        address_key = f"get_vesting_vested_addresses_{address}_balance_confirmed"
+        keys.append(address_key)
+    stake_token_key = "get_vesting_vested_token_boxes"
+    keys.append(stake_token_key)
+    return keys
+
+
+def get_new_addresses_vesting(old_transactions, new_transactions):
+    old_transaction_ids = list(map(lambda x : x["id"], old_transactions))
+    addresses = set()
+    for transaction in new_transactions:
+        if transaction["id"] not in old_transaction_ids:
+            outputs = transaction["outputs"]
+            for box in outputs:
+                address = box["address"]
+                if is_wallet_address(address):
+                    addresses.add(address)
+                    break
+
+    return list(addresses)
+
+
 class CacheInvalidatorService:
     def __init__(self):
         self.access_token = get_jwt_token()
         self.store = Store()
+
+
+    # vesting pool
+    def _loop_vesting(self):
+        transactions = []
+        for address in config.VESTING_SMART_CONTRACT_ADDRESSES:
+            pool_url = f"{config.ERGO_EXPLORER_API}/addresses/{address}/transactions?offset=0&limit=30"
+            res = CachedRequests.get(pool_url)
+            transactions.extend(res["items"])
+
+        if str(self.store.get(f"transactions_vesting")) == str(transactions):
+            logging.info(f"CacheInvalidatorService._loop_vesting::no new transactions detected for vesting")
+            return
+
+        logging.info(f"CacheInvalidatorService._loop_vesting::new transactions detected for vesting")
+        old_transactions = []
+        if self.store.get(f"transactions_vesting") != None:
+            old_transactions = self.store.get(f"transactions_vesting")
+
+        addresses = get_new_addresses_vesting(old_transactions, transactions)
+        keys = generate_keys_vesting(addresses)
+        if len(keys) != 0:
+            logging.critical(f"CacheInvalidatorService._loop_vesting::invalidating the following keys: {str(keys)}")
+            ret = invalidate_cache(keys, self.access_token)
+            if ret == None:
+                raise JWTException("CacheInvalidatorService._loop_vesting::jwt token expired")
+            logging.critical(f"CacheInvalidatorService._loop_staking::invalidated: {str(ret)}")
+
+        self.store.set(f"transactions_vesting", transactions)
+
 
     # _loop over multiple smart contract addresses
     # passed in as config
@@ -106,6 +163,7 @@ class CacheInvalidatorService:
     def start(self):
         while True:
             try:
+                # staking
                 for stake_config in config.STAKING_TOKENS:
                     try:
                         self._loop_staking(stake_config)
@@ -113,6 +171,15 @@ class CacheInvalidatorService:
                         raise e
                     except Exception as e:
                         logging.error(f"CacheInvalidatorService.start::{str(e)}")
+
+                # vesting
+                try:
+                    self._loop_vesting()
+                except JWTException as e:
+                    raise e
+                except Exception as e:
+                    logging.error(f"CacheInvalidatorService.start::{str(e)}")
+
             except Exception as e:
                 logging.error(f"CacheInvalidatorService.start::{str(e)}")
                 time.sleep(10)
