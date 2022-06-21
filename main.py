@@ -96,11 +96,79 @@ def get_new_addresses_vesting(old_transactions, new_transactions):
 
     return list(addresses)
 
+def get_new_blocks(old_blocks, new_blocks):
+    old_block_ids = list(map(lambda x : x["id"], old_blocks))
+    blocks = set()
+    for block in new_blocks:
+        if block["id"] not in old_block_ids:
+            blocks.add(block["id"])
+
+    return list(blocks)
+
+def get_new_addresses_blocks(blocks):
+    addresses = set()
+    for block in blocks:
+        try:
+            res = requests.get(f"{config.ERGO_EXPLORER_API}/blocks/{block}").json()
+            transactions = res["block"]["blockTransactions"]
+            for transaction in transactions:
+                for inp in transaction["inputs"]:
+                    address = inp["address"]
+                    if is_wallet_address(address):
+                        addresses.add(address)
+                for out in transaction["outputs"]:
+                    address = out["address"]
+                    if is_wallet_address(address):
+                        addresses.add(address)
+                    
+        except Exception as e:
+            logging.error(f"get_new_addresses_blocks::{str(e)}")
+
+    return list(addresses)
+
+
+def generate_keys_blocks(addresses):
+    keys = []
+    if len(addresses) == 0:
+        return keys
+    for address in addresses:
+        address_key = f"get_asset_balance_{address}"
+        keys.append(address_key)
+    return keys
+
 
 class CacheInvalidatorService:
     def __init__(self):
         self.access_token = get_jwt_token()
         self.store = Store()
+
+
+    def _loop_lastblock(self):
+        blocks = []
+        pool_url = f"{config.ERGO_EXPLORER_API}/blocks?limit=5&offset=0&sortBy=height&sortDirection=desc"
+        res = CachedRequests.get(pool_url)
+        blocks.extend(res["items"])
+
+        if str(self.store.get(f"last_blocks")) == str(blocks):
+            logging.info(f"CacheInvalidatorService._loop_lastblock::no new blocks detected")
+            return
+
+        logging.info(f"CacheInvalidatorService._loop_lastblock::new blocks detected")
+        old_blocks = []
+        if self.store.get(f"last_blocks") != None:
+            old_blocks = self.store.get(f"last_blocks")
+
+        new_blocks = get_new_blocks(old_blocks, blocks)
+        addresses = get_new_addresses_blocks(new_blocks)
+        keys = generate_keys_blocks(addresses)
+        if len(keys) != 0:
+            logging.critical(f"CacheInvalidatorService._loop_lastblock::invalidating the following keys: {str(keys)}")
+            ret = invalidate_cache(keys, self.access_token)
+            if ret == None:
+               raise JWTException("CacheInvalidatorService._loop_lastblock::jwt token expired")
+            logging.critical(f"CacheInvalidatorService._loop_lastblock::invalidated: {str(ret)}")
+
+        self.store.set(f"last_blocks", blocks)
 
 
     # vesting pool
@@ -175,6 +243,14 @@ class CacheInvalidatorService:
                 # vesting
                 try:
                     self._loop_vesting()
+                except JWTException as e:
+                    raise e
+                except Exception as e:
+                    logging.error(f"CacheInvalidatorService.start::{str(e)}")
+
+                # last block
+                try:
+                    self._loop_lastblock()
                 except JWTException as e:
                     raise e
                 except Exception as e:
