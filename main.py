@@ -195,7 +195,7 @@ class CacheInvalidatorService:
             ret = invalidate_cache(keys, self.access_token)
             if ret == None:
                 raise JWTException("CacheInvalidatorService._loop_vesting::jwt token expired")
-            logging.critical(f"CacheInvalidatorService._loop_staking::invalidated: {str(ret)}")
+            logging.critical(f"CacheInvalidatorService._loop_vesting::invalidated: {str(ret)}")
 
         self.store.set(f"transactions_vesting", transactions)
 
