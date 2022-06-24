@@ -231,14 +231,14 @@ class CacheInvalidatorService:
     def start(self):
         while True:
             try:
-                # staking
-                for stake_config in config.STAKING_TOKENS:
-                    try:
-                        self._loop_staking(stake_config)
-                    except JWTException as e:
-                        raise e
-                    except Exception as e:
-                        logging.error(f"CacheInvalidatorService.start::{str(e)}")
+                # # staking
+                # for stake_config in config.STAKING_TOKENS:
+                #     try:
+                #         self._loop_staking(stake_config)
+                #     except JWTException as e:
+                #         raise e
+                #     except Exception as e:
+                #         logging.error(f"CacheInvalidatorService.start::{str(e)}")
 
                 # vesting
                 try:
@@ -248,13 +248,13 @@ class CacheInvalidatorService:
                 except Exception as e:
                     logging.error(f"CacheInvalidatorService.start::{str(e)}")
 
-                # last block
-                try:
-                    self._loop_lastblock()
-                except JWTException as e:
-                    raise e
-                except Exception as e:
-                    logging.error(f"CacheInvalidatorService.start::{str(e)}")
+                # # last block
+                # try:
+                #     self._loop_lastblock()
+                # except JWTException as e:
+                #     raise e
+                # except Exception as e:
+                #     logging.error(f"CacheInvalidatorService.start::{str(e)}")
 
             except Exception as e:
                 logging.error(f"CacheInvalidatorService.start::{str(e)}")
